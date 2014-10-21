@@ -30,7 +30,8 @@ digraph g {
 }
 
 ![](./images/dot.png)
-***Image dot. ***
+
+***Image dot.***
 
 **How to use it:**
 --------------

@@ -38,7 +38,7 @@ digraph g {
 
 Gitbook GrViz plugin can be installed from NPM using:
 
-```$ npm install gitbook-GrViz```
+```$ npm install gitbook-grvis```
 
 ***Additional requirements:***
 

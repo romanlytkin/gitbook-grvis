@@ -1,119 +1,44 @@
-var count = 0;
-var spawn = require('child_process').spawn;
 var fs = require('fs');
+var re = /^```dot((.*\n)+?)?```$/im;
+var crypto = require('crypto');
+var path = require('path');
 
-function parseDot(page) {
-    perDot = page.content.match(/^```dot((.*\n)+?)?```$/igm);
-    if (perDot) {
-        var dot = perDot.toString();
-        dot = dot.replace(/```dot/igm, '');
-        dot = dot.replace(/```/igm, '');
-        fs.writeFileSync("./alldot.dot", dot);
-    }
-}
+require('shelljs/global');
 
-function execFile(command, args, callback) {
-    var prc = spawn(command, args);
-    prc.stdout.on('data', function(data) {
-        console.log(data.toString());
-    });
-
-    prc.stderr.on('data', function(data) {
-        console.log(data.toString());
-    });
-
-    prc.on('close', function(code) {
-        if ("function" === typeof callback) callback(!!code);
-    });
-};
+var dotPath, mode;
 
 module.exports = {
-    book: {
-        assets: "./book",
-        js: [
-            "test.js"
-        ],
-        css: [
-            "test.css"
-        ],
-        html: {
-            "html:start": function() {
-                return "<!-- Start book " + this.options.title + " -->"
-            },
-            "html:end": function() {
-                return "<!-- End of book " + this.options.title + " -->"
-            },
+	hooks: {
+		"init": function() {
+			dotPath = path.join(this.options.output, 'assets', 'images', 'dot');
+			mode = this.options._name;
+			mkdir('-p', dotPath);
+		}
 
-            "head:start": "<!-- head:start -->",
-            "head:end": "<!-- head:end -->",
+	,	"page:before": function(page) {
+			var content = page.content;
 
-            "body:start": "<!-- body:start -->",
-            "body:end": "<!-- body:end -->"
-        }
-    },
-    hooks: {
-        // For all the hooks, this represent the current generator
+			while((match = re.exec(content))) {
+				var rawBlock = match[0];
+				var dotBlock = match[1];
+				var md5 = crypto.createHash('md5').update(dotBlock).digest('hex');
+				var dotFile = path.join(dotPath, md5+'.dot');
+				var svgFile = path.join(dotPath, md5+'.svg');
 
-        // This is called before the book is generated
-        "init": function() {
-            console.log("init gitbook-GrVis!");
-        },
+				fs.writeFileSync(dotFile, match[1], 'utf8');
+				
+				if(0 == exec(['dot -Tsvg', dotFile, '-o', svgFile].join(' ')).code) {
+					var svgPath = ('serve' == mode) ? 'assets/images/dot/' : ['file://', dotPath, '/'].join('');
+					var svgTag = ['![](', svgPath, md5, '.svg)'].join('');
+					
+					page.content = content = content.replace(rawBlock, svgTag);
+				}
+			}
+			
+			return page;
+		},
 
-        // This is called after the book generation
-        "finish": function() {
-            console.log("finish gitbook-GrVis!");
-        },
-
-        // The following hooks are called for each page of the book
-        // and can be used to change page content (html, data or markdown)
-
-
-        // Before parsing markdown
-        "page:before": function(page) {
-            // page.path is the path to the file
-            // page.content is a string with the file markdown content
-            parseDot(page);
-            var linesDot = fs.readFileSync('alldot.dot', 'utf8').split(',');
-            //DOT
-            for (var i = 0; i < linesDot.length; i++) {
-                count = i + 1;
-                fs.writeFileSync("./assets/images/dot/dot_" + count + ".gv", linesDot[i]);
-                try {
-                    execFile('dot', ['-Tsvg',
-                        './assets/images/dot/dot_' + count + '.gv',
-                        '-o',
-                        './assets/images/dot/dot_' + count + '.svg'
-                    ]);
-                } catch (e) {};
-                page.content = page.content.replace('```dot' + linesDot[i] + '```', '![](../assets/images/dot/dot_' + count + '.svg)');
-            };
-            // Example:
-            //page.content = "# Title\n" + page.content;
-
-            return page;
-        },
-
-        // Before html generation
-        "page": function(page) {
-            // page.path is the path to the file
-            // page.sections is a list of parsed sections
-
-            // Example:
-            //page.sections.unshift({type: "normal", content: "<h1>Title</h1>"})
-
-            return page;
-        },
-
-        // After html generation
-        "page:after": function(page) {
-            // page.path is the path to the file
-            // page.content is a string with the html output
-
-            // Example:
-            //page.content = "<h1>Title</h1>\n" + page.content;
-            // -> This title will be added before the html tag so not visible in the browser
-
-            return page;
-        }
-    }
+		"page": function(page) { return page; },
+		"page:after": function(page) { return page; }
+	}
 };
